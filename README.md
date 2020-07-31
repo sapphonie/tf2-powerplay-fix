@@ -9,9 +9,6 @@ requires admin flag "root" on server.
 
 type !pp or /pp on server. will toggle on or off.
 
-lateloading is buggy and unsupported
-
 ### todo
 
-- consistently set player on fire
-
+- add quickfix stun / knockback prevention without preventing player from blast jumping
