@@ -6,17 +6,83 @@ public Plugin myinfo =
     name        = "PowerPlay For Realz",
     author      = "stephanie",
     description = "type /pp to win game",
-    version     = "0.0.1",
+    version     = "0.0.2",
     url         = "https://steph.anie.dev/"
 };
 
 
 bool PowerPlay              [MAXPLAYERS + 1];
-Handle g_hLaughAndIgnite    [MAXPLAYERS + 1];
+Handle g_hLaughTimer    [MAXPLAYERS + 1];
 
 public OnPluginStart()
 {
     RegAdminCmd("sm_pp", setPP, ADMFLAG_ROOT);
+
+    AddNormalSoundHook(stopFlames);
+}
+
+public Action stopFlames
+    (
+        int clients[MAXPLAYERS],
+        int& numClients,
+        char sample[PLATFORM_MAX_PATH],
+        int& entity,
+        int& channel,
+        float& volume,
+        int& level,
+        int& pitch,
+        int& flags,
+        char soundEntry[PLATFORM_MAX_PATH],
+        int& seed
+    )
+{
+    if  (
+            // block flame noises for client
+            StrContains(sample, "flame_engulf") != -1
+            // block flame pain noises for client
+            || StrContains(sample, "PainSharp") != -1
+            // only mess with sounds if player is powerplayed
+            && (PowerPlay[entity])
+        )
+    {
+        return Plugin_Handled;
+    }
+
+    return Plugin_Continue;
+}
+
+
+public void OnPluginEnd()
+{
+    for (int client = 0; client < MaxClients + 1; client++)
+    {
+        if (IsValidClient(client) && PowerPlay[client])
+        {
+            TF2_RemoveCondition(client, TFCond_OnFire);                 // extinguishes player
+            TF2_RemoveCondition(client, TFCond_Kritzkrieged);           // kritz
+            TF2_RemoveCondition(client, TFCond_Ubercharged);            // uber
+            TF2_RemoveCondition(client, TFCond_DefenseBuffed);          // battalion's backup
+            TF2_RemoveCondition(client, TFCond_RegenBuffed);            // conch buff
+            TF2_RemoveCondition(client, TFCond_Buffed);                 // buff banner
+            TF2_RemoveCondition(client, TFCond_UberBulletResist);       // vacc bullet charge
+            TF2_RemoveCondition(client, TFCond_UberBlastResist);        // vacc blast charge
+            TF2_RemoveCondition(client, TFCond_UberFireResist);         // vacc fire charge
+            //TF2_RemoveCondition(client, TFCond_MegaHeal);             // quick fix
+            TF2_RemoveCondition(client, TFCond_OnFire);                 // fire
+            // set player health to max overheal (give or take)
+            SetEntityHealth(client, RoundToFloor(GetEntProp(client, Prop_Data, "m_iMaxHealth") * 1.5));
+
+            PrintToChat(client, "Disabled PowerPlay on ALL!");
+            if (g_hLaughTimer[client] != null)
+            {
+                LogMessage("Destroying powerplay timer");
+                KillTimer(g_hLaughTimer[client]);
+                g_hLaughTimer[client] = null;
+            }
+            PowerPlay[client] = false;
+        }
+    }
+    LogMessage("unloaded pp.smx");
 }
 
 public Action setPP(client, args)
@@ -24,7 +90,7 @@ public Action setPP(client, args)
     if (!PowerPlay[client])
     {
         ReplyToCommand(client, "Enabled PowerPlay on self!");
-        g_hLaughAndIgnite[client] = CreateTimer(6.9, timer_LaughAndIgnite, GetClientUserId(client), TIMER_REPEAT);
+        g_hLaughTimer[client] = CreateTimer(8.0, timer_Laugh, GetClientUserId(client), TIMER_REPEAT);
     }
     else if (PowerPlay[client])
     {
@@ -38,20 +104,23 @@ public Action setPP(client, args)
         TF2_RemoveCondition(client, TFCond_UberBulletResist);       // vacc bullet charge
         TF2_RemoveCondition(client, TFCond_UberBlastResist);        // vacc blast charge
         TF2_RemoveCondition(client, TFCond_UberFireResist);         // vacc fire charge
-        //TF2_RemoveCondition(client, TFCond_MegaHeal);               // quick fix
-
-
-        if (g_hLaughAndIgnite[client] != null)
+        //TF2_RemoveCondition(client, TFCond_MegaHeal);             // quick fix
+        TF2_RemoveCondition(client, TFCond_OnFire);                 // fire
+        // set player health to max overheal (give or take)
+        SetEntityHealth(client, RoundToFloor(GetEntProp(client, Prop_Data, "m_iMaxHealth") * 1.5));
+        // murder timer
+        if (g_hLaughTimer[client] != null)
         {
             LogMessage("Destroying powerplay timer");
-            KillTimer(g_hLaughAndIgnite[client]);
-            g_hLaughAndIgnite[client] = null;
+            KillTimer(g_hLaughTimer[client]);
+            g_hLaughTimer[client] = null;
         }
     }
+    // toggle !
     PowerPlay[client] = !PowerPlay[client];
 }
 
-public Action timer_LaughAndIgnite(Handle timer, userid)
+public Action timer_Laugh(Handle timer, userid)
 {
     int client = GetClientOfUserId(userid);
     if (IsValidClient(client) && IsClientPlaying(client) && PowerPlay[client])
@@ -112,6 +181,8 @@ public void OnGameFrame()
             TF2_AddCondition(client, TFCond_UberBlastResist);       // vacc blast charge
             TF2_AddCondition(client, TFCond_UberFireResist);        // vacc fire charge
             //TF2_AddCondition(client, TFCond_MegaHeal);            // quick fix
+            TF2_IgnitePlayer(client, client, 0.1);                  // set player on fire
+            SetEntityHealth(client, 6969);                          // set health to high number (arbitrary)
         }
     }
 }
